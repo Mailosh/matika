@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>High-Focus Matematika</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .btn-press:active { transform: scale(0.96); transition: transform 0.05s ease; }
+        .safe-area-pb { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); } /* Zväčšená slepá zóna pre Netlify badge */
+        
+        /* Modal animácie */
+        #info-modal { opacity: 0; pointer-events: none; transition: opacity 0.2s ease-out; }
+        #info-modal.active { opacity: 1; pointer-events: auto; }
+        #info-modal .modal-content { transform: translateY(10px) scale(0.95); transition: all 0.2s ease-out; }
+        #info-modal.active .modal-content { transform: translateY(0) scale(1); }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 overflow-hidden fixed inset-0 w-full h-full">
+
+    <!-- Hlavný kontajner -->
+    <div class="flex flex-col w-full h-full p-4 sm:p-6 pb-0">
+        
+        <!-- HORNÝ PANEL (Nastavenia a Skóre) -->
+        <div class="w-full max-w-md mx-auto flex-shrink-0 flex flex-col gap-3 sm:gap-4">
+            
+            <!-- Lišta so skóre a zvukom -->
+            <div class="flex justify-between items-center bg-slate-800/50 rounded-2xl p-4 sm:p-5 border border-slate-700/50">
+                <div class="flex flex-col">
+                    <span class="text-xs font-semibold tracking-wider text-slate-400 mb-1">ŠPRINT</span>
+                    <div class="text-xl sm:text-2xl font-bold text-white"><span id="progress-text">1</span> <span class="text-slate-500 text-lg">/ 20</span></div>
+                </div>
+                
+                <div class="flex flex-col items-center cursor-pointer group" id="score-btn">
+                    <span class="text-xs font-semibold tracking-wider text-slate-400 mb-1 flex items-center gap-1 group-hover:text-slate-300 transition-colors">
+                        SKÓRE 
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </span>
+                    <div id="score-display" class="text-2xl sm:text-3xl font-black text-emerald-400 group-hover:text-emerald-300 transition-colors">0</div>
+                </div>
+
+                <button id="mute-btn" class="p-3 bg-slate-700/50 hover:bg-slate-600/50 rounded-xl text-slate-300 transition-colors">
+                    <svg id="icon-vol" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                    <svg id="icon-mute" class="hidden" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                </button>
+            </div>
+
+            <!-- Obtiažnosť -->
+            <div class="grid grid-cols-3 gap-2 bg-slate-800/30 p-1.5 rounded-xl border border-slate-700/30">
+                <button class="diff-btn active py-2 sm:py-3 text-sm font-semibold rounded-lg bg-slate-600 text-white shadow-sm transition-all" data-val="easy">Ľahká</button>
+                <button class="diff-btn py-2 sm:py-3 text-sm font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition-all" data-val="medium">Stredná</button>
+                <button class="diff-btn py-2 sm:py-3 text-sm font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition-all" data-val="hard">Ťažká</button>
+            </div>
+
+            <!-- Operácie (Multi-select) -->
+            <div class="grid grid-cols-5 gap-2 bg-slate-800/30 p-1.5 rounded-xl border border-slate-700/30">
+                <button class="op-btn active py-2 sm:py-3 text-lg font-black rounded-lg bg-emerald-500 text-white shadow-sm transition-all" data-val="+">+</button>
+                <button class="op-btn active py-2 sm:py-3 text-lg font-black rounded-lg bg-emerald-500 text-white shadow-sm transition-all" data-val="-">-</button>
+                <button class="op-btn active py-2 sm:py-3 text-lg font-black rounded-lg bg-emerald-500 text-white shadow-sm transition-all" data-val="*">×</button>
+                <button class="op-btn active py-2 sm:py-3 text-lg font-black rounded-lg bg-emerald-500 text-white shadow-sm transition-all" data-val="/">÷</button>
+                <button id="btn-mix" class="py-2 sm:py-3 text-xs sm:text-sm font-bold uppercase rounded-lg text-slate-400 hover:text-slate-200 transition-all">Mix</button>
+            </div>
+        </div>
+
+        <!-- STREDNÝ PANEL (Príklad) -->
+        <div class="flex-1 flex flex-col justify-center items-center min-h-[100px] mt-2">
+            <div class="flex items-center gap-3 sm:gap-4 font-black tracking-tighter" style="font-size: clamp(3rem, 10vw, 4.5rem);">
+                <span id="num1" class="text-white"></span>
+                <span id="operator" class="text-slate-400"></span>
+                <span id="num2" class="text-white"></span>
+                <span class="text-slate-500">=</span>
+                <div class="relative min-w-[70px] sm:min-w-[90px] flex justify-center border-b-4 border-slate-600 pb-1">
+                    <span id="user-input" class="text-emerald-400 text-shadow-glow">?</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SPODNÝ PANEL (Klávesnica + Slepá zóna) -->
+        <div class="w-full max-w-sm mx-auto flex-shrink-0 safe-area-pb pt-4">
+            <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                <!-- Riadok 1 -->
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">1</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">2</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">3</button>
+                
+                <!-- Riadok 2 -->
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">4</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">5</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">6</button>
+                
+                <!-- Riadok 3 -->
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">7</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">8</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">9</button>
+                
+                <!-- Riadok 4 -->
+                <button id="btn-del" class="btn-press h-14 sm:h-16 bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-sm font-bold uppercase tracking-wider rounded-xl shadow-lg border border-slate-700/50">Zmazať</button>
+                <button class="num-btn btn-press h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white text-2xl font-bold rounded-xl shadow-lg border border-slate-700/50">0</button>
+                <button id="btn-enter" class="btn-press h-14 sm:h-16 bg-emerald-500 hover:bg-emerald-400 text-white text-3xl font-bold rounded-xl shadow-lg shadow-emerald-900/20 border border-emerald-400/50 flex justify-center items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ZHRNUTIE ŠPRINTU (Skryté) -->
+    <div id="summary-screen" class="fixed inset-0 bg-slate-900 z-50 flex flex-col justify-center items-center p-6 hidden">
+        <div class="w-full max-w-sm glass-panel p-8 rounded-3xl text-center border-slate-700/50">
+            <h2 class="text-3xl font-black text-white mb-2">Šprint hotový!</h2>
+            <p class="text-slate-400 font-medium mb-8">Výsledky tvojho tréningu</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                    <p class="text-xs font-bold text-slate-500 tracking-wider mb-1">SKÓRE</p>
+                    <p id="sum-score" class="text-3xl font-black text-emerald-400">0</p>
+                </div>
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                    <p class="text-xs font-bold text-slate-500 tracking-wider mb-1">ČAS</p>
+                    <p id="sum-time" class="text-3xl font-black text-white">00:00</p>
+                </div>
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                    <p class="text-xs font-bold text-slate-500 tracking-wider mb-1">ÚSPEŠNOSŤ</p>
+                    <p id="sum-acc" class="text-2xl font-black text-white">100%</p>
+                </div>
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                    <p class="text-xs font-bold text-slate-500 tracking-wider mb-1">NAJ SÉRIA</p>
+                    <p id="sum-streak" class="text-2xl font-black text-white">0</p>
+                </div>
+            </div>
+
+            <button id="btn-restart" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-lg tracking-wide rounded-xl shadow-lg transition-transform active:scale-95">Ďalší šprint</button>
+        </div>
+    </div>
+
+    <!-- MODAL PRE PRAVIDLÁ SKÓRE -->
+    <div id="info-modal" class="fixed inset-0 z-50 flex justify-center items-center p-4 bg-slate-900/80">
+        <div class="modal-content glass-panel w-full max-w-sm rounded-3xl p-6 relative border border-slate-600/50">
+            <button id="close-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <h3 class="text-xl font-bold text-white mb-4">Ako funguje bodovanie?</h3>
+            <ul class="space-y-3 text-sm text-slate-300">
+                <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 font-bold mt-0.5">•</span>
+                    <span>Hra sa hrá na <strong>20 príkladov</strong> (jeden šprint).</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 font-bold mt-0.5">•</span>
+                    <span>Základné body: Ľahká (+10), Stredná (+20), Ťažká (+30).</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 font-bold mt-0.5">•</span>
+                    <span><strong>Séria bez chyby (Streak):</strong> Ak odpovedáš správne za sebou, získavaš dodatočné bonusové body.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 font-bold mt-0.5">•</span>
+                    <span>Ak zadáš zlý výsledok, séria a bonus sa resetujú na nulu, ale hra pokračuje ďalej kým nesplníš 20. príklad.</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            difficulty: 'easy',
+            operations: ['+', '-', '*', '/'],
+            currentProblem: null,
+            input: '',
+            score: 0,
+            streak: 0,
+            maxStreak: 0,
+            attempts: 0,
+            correct: 0,
+            isMuted: false,
+            sprintTotal: 20,
+            sprintCurrent: 1,
+            startTime: null
+        };
+
+        const config = {
+            easy: { maxAdd: 20, maxMult: 5 },
+            medium: { maxAdd: 100, maxMult: 10 },
+            hard: { maxAdd: 500, maxMult: 20 },
+            basePoints: { easy: 10, medium: 20, hard: 30 }
+        };
+
+        // Zvukový engine s ADSR obálkou (žiadne pukanie)
+        let audioCtx = null;
+        let isAudioUnlocked = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function unlockAudioSilent() {
+            if (isAudioUnlocked) return;
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.value = 0;
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.01);
+            isAudioUnlocked = true;
+        }
+
+        document.addEventListener('touchstart', unlockAudioSilent, { once: true });
+        document.addEventListener('mousedown', unlockAudioSilent, { once: true });
+
+        function playSound(type) {
+            if (state.isMuted) return;
+            initAudio();
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            
+            if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(432, now);
+                
+                // ADSR obálka
+                gainNode.gain.setValueAtTime(0, now);
+                gainNode.gain.linearRampToValueAtTime(0.3, now + 0.02); // Rýchly, hladký nábeh (Attack)
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3); // Plynulý dobeh (Release)
+                
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'wrong') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+                
+                gainNode.gain.setValueAtTime(0, now);
+                gainNode.gain.linearRampToValueAtTime(0.2, now + 0.02);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                
+                osc.start(now);
+                osc.stop(now + 0.2);
+            }
+        }
+
+        function randInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function generateProblem() {
+            if (state.operations.length === 0) {
+                // Bezpečnostná poistka
+                state.operations = ['+'];
+                document.querySelector('[data-val="+"]').classList.replace('bg-slate-700', 'bg-emerald-500');
+                document.querySelector('[data-val="+"]').classList.replace('text-slate-400', 'text-white');
+            }
+            
+            const op = state.operations[Math.floor(Math.random() * state.operations.length)];
+            const bounds = config[state.difficulty];
+            let num1, num2;
+
+            if (op === '+') {
+                num1 = randInt(1, bounds.maxAdd);
+                num2 = randInt(1, bounds.maxAdd);
+            } else if (op === '-') {
+                num1 = randInt(1, bounds.maxAdd);
+                num2 = randInt(1, bounds.maxAdd);
+                if (num2 > num1) [num1, num2] = [num2, num1]; // Vždy kladný výsledok
+            } else if (op === '*') {
+                num1 = randInt(2, bounds.maxMult);
+                num2 = randInt(2, bounds.maxMult);
+            } else if (op === '/') {
+                num2 = randInt(2, bounds.maxMult);
+                const answer = randInt(2, bounds.maxMult);
+                num1 = num2 * answer; // Vždy celočíselný výsledok
+            }
+
+            state.currentProblem = { num1, op, num2, answer: eval(`${num1}${op === '×' ? '*' : op === '÷' ? '/' : op}${num2}`) };
+            
+            document.getElementById('num1').textContent = num1;
+            document.getElementById('operator').textContent = op === '*' ? '×' : op === '/' ? '÷' : op;
+            document.getElementById('num2').textContent = num2;
+            state.input = '';
+            renderInput();
+
+            if (!state.startTime) state.startTime = Date.now();
+            document.getElementById('progress-text').textContent = state.sprintCurrent;
+        }
+
+        function renderInput() {
+            const el = document.getElementById('user-input');
+            if (state.input === '') {
+                el.textContent = '?';
+                el.classList.replace('text-white', 'text-emerald-400');
+            } else {
+                el.textContent = state.input;
+                el.classList.replace('text-emerald-400', 'text-white');
+            }
+        }
+
+        function handleInput(val) {
+            if (state.input.length < 5) {
+                state.input += val;
+                renderInput();
+            }
+        }
+
+        function handleDelete() {
+            state.input = state.input.slice(0, -1);
+            renderInput();
+        }
+
+        function endSprint() {
+            const timeStr = ((Date.now() - state.startTime) / 1000).toFixed(1);
+            const mins = Math.floor(timeStr / 60);
+            const secs = Math.floor(timeStr % 60).toString().padStart(2, '0');
+            
+            document.getElementById('sum-score').textContent = state.score;
+            document.getElementById('sum-time').textContent = `${mins}:${secs}`;
+            document.getElementById('sum-acc').textContent = Math.round((state.correct / state.attempts) * 100) + '%';
+            document.getElementById('sum-streak').textContent = state.maxStreak;
+            
+            document.getElementById('summary-screen').classList.remove('hidden');
+        }
+
+        function checkAnswer() {
+            if (state.input === '') return;
+            state.attempts++;
+            
+            if (parseInt(state.input) === state.currentProblem.answer) {
+                playSound('correct');
+                state.correct++;
+                state.streak++;
+                if (state.streak > state.maxStreak) state.maxStreak = state.streak;
+                state.score += config[state.difficulty].basePoints + (state.streak * 5);
+                document.getElementById('score-display').textContent = state.score;
+                
+                if (state.sprintCurrent >= state.sprintTotal) {
+                    endSprint();
+                } else {
+                    state.sprintCurrent++;
+                    generateProblem();
+                }
+            } else {
+                playSound('wrong');
+                state.streak = 0;
+                
+                const el = document.getElementById('user-input');
+                el.classList.add('text-rose-500');
+                el.classList.remove('text-white');
+                setTimeout(() => {
+                    state.input = '';
+                    renderInput();
+                }, 400);
+            }
+        }
+
+        // Toggles & Events
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.diff-btn').forEach(b => {
+                    b.classList.replace('bg-slate-600', 'bg-transparent');
+                    b.classList.replace('text-white', 'text-slate-400');
+                });
+                const target = e.target;
+                target.classList.replace('bg-transparent', 'bg-slate-600');
+                target.classList.replace('text-slate-400', 'text-white');
+                state.difficulty = target.dataset.val;
+                
+                // Reset a re-gen ak zmení obtiažnosť
+                state.input = '';
+                generateProblem();
+            });
+        });
+
+        const opBtns = document.querySelectorAll('.op-btn');
+        opBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const val = e.target.dataset.val;
+                const isActive = state.operations.includes(val);
+                
+                if (isActive) {
+                    // Nedovoľ vypnúť posledné znamienko
+                    if (state.operations.length <= 1) return;
+                    state.operations = state.operations.filter(op => op !== val);
+                    e.target.classList.replace('bg-emerald-500', 'bg-slate-700');
+                    e.target.classList.replace('text-white', 'text-slate-400');
+                } else {
+                    state.operations.push(val);
+                    e.target.classList.replace('bg-slate-700', 'bg-emerald-500');
+                    e.target.classList.replace('text-slate-400', 'text-white');
+                }
+                generateProblem();
+            });
+        });
+
+        document.getElementById('btn-mix').addEventListener('click', () => {
+            state.operations = ['+', '-', '*', '/'];
+            opBtns.forEach(btn => {
+                btn.classList.replace('bg-slate-700', 'bg-emerald-500');
+                btn.classList.replace('text-slate-400', 'text-white');
+            });
+            generateProblem();
+        });
+
+        // Numpad Events
+        document.querySelectorAll('.num-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => handleInput(e.target.textContent));
+        });
+        document.getElementById('btn-del').addEventListener('click', handleDelete);
+        document.getElementById('btn-enter').addEventListener('click', checkAnswer);
+
+        // Zvuk Mute
+        document.getElementById('mute-btn').addEventListener('click', () => {
+            state.isMuted = !state.isMuted;
+            document.getElementById('icon-vol').classList.toggle('hidden');
+            document.getElementById('icon-mute').classList.toggle('hidden');
+        });
+
+        // Klávesnica podpora
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('summary-screen').classList.contains('hidden') === false) {
+                if (e.key === 'Enter') document.getElementById('btn-restart').click();
+                return;
+            }
+            if (e.key >= '0' && e.key <= '9') handleInput(e.key);
+            if (e.key === 'Backspace') handleDelete();
+            if (e.key === 'Enter') checkAnswer();
+        });
+
+        // Modal
+        document.getElementById('score-btn').addEventListener('click', () => {
+            document.getElementById('info-modal').classList.add('active');
+        });
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('info-modal').classList.remove('active');
+        });
+        document.getElementById('info-modal').addEventListener('click', (e) => {
+            if(e.target === document.getElementById('info-modal')) {
+                document.getElementById('info-modal').classList.remove('active');
+            }
+        });
+
+        // Reštart
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            state.score = 0;
+            state.streak = 0;
+            state.maxStreak = 0;
+            state.attempts = 0;
+            state.correct = 0;
+            state.sprintCurrent = 1;
+            state.startTime = null;
+            document.getElementById('score-display').textContent = '0';
+            document.getElementById('summary-screen').classList.add('hidden');
+            generateProblem();
+        });
+
+        // Start
+        generateProblem();
+    </script>
+</body>
+</html>
