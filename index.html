@@ -177,7 +177,8 @@
             isMuted: false,
             sprintTotal: 20,
             sprintCurrent: 1,
-            startTime: null
+            startTime: null,
+            locked: false
         };
 
         const config = {
@@ -200,56 +201,56 @@
             }
         }
 
+        // Odomknutie zvuku pri prvej interakcii (iOS vyžaduje click/touchend, nie touchstart)
         function unlockAudioSilent() {
-            if (isAudioUnlocked) return;
             initAudio();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            gain.gain.value = 0;
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.01);
-            isAudioUnlocked = true;
+            if (audioCtx.state === 'running' && !isAudioUnlocked) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                gain.gain.value = 0;
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.01);
+                isAudioUnlocked = true;
+            }
+            if (isAudioUnlocked) {
+                ['touchend', 'click', 'mousedown', 'keydown'].forEach(ev =>
+                    document.removeEventListener(ev, unlockAudioSilent, true));
+            }
         }
 
-        document.addEventListener('touchstart', unlockAudioSilent, { once: true });
-        document.addEventListener('mousedown', unlockAudioSilent, { once: true });
+        ['touchend', 'click', 'mousedown', 'keydown'].forEach(ev =>
+            document.addEventListener(ev, unlockAudioSilent, true));
+
+        function tone(freqStart, freqEnd, type, start, dur, vol) {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            osc.type = type;
+            osc.frequency.setValueAtTime(freqStart, start);
+            if (freqEnd !== freqStart) osc.frequency.exponentialRampToValueAtTime(freqEnd, start + dur);
+            // ADSR obálka (bez praskania)
+            gainNode.gain.setValueAtTime(0.0001, start);
+            gainNode.gain.linearRampToValueAtTime(vol, start + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, start + dur);
+            osc.start(start);
+            osc.stop(start + dur + 0.02);
+        }
 
         function playSound(type) {
             if (state.isMuted) return;
             initAudio();
-
-            const osc = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            
-            osc.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-
             const now = audioCtx.currentTime;
-            
+
             if (type === 'correct') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(432, now);
-                
-                // ADSR obálka
-                gainNode.gain.setValueAtTime(0, now);
-                gainNode.gain.linearRampToValueAtTime(0.3, now + 0.02); // Rýchly, hladký nábeh (Attack)
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3); // Plynulý dobeh (Release)
-                
-                osc.start(now);
-                osc.stop(now + 0.3);
+                // Príjemný dvojtón nahor
+                tone(523, 523, 'sine', now, 0.18, 0.3);
+                tone(784, 784, 'sine', now + 0.12, 0.28, 0.3);
             } else if (type === 'wrong') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(150, now);
-                osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
-                
-                gainNode.gain.setValueAtTime(0, now);
-                gainNode.gain.linearRampToValueAtTime(0.2, now + 0.02);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                
-                osc.start(now);
-                osc.stop(now + 0.2);
+                // Počuteľný nízky tón klesajúci (aj na malých reproduktoroch telefónu)
+                tone(330, 180, 'triangle', now, 0.3, 0.35);
             }
         }
 
@@ -299,24 +300,28 @@
 
         function renderInput() {
             const el = document.getElementById('user-input');
+            el.classList.remove('text-white', 'text-emerald-400', 'text-rose-500');
             if (state.input === '') {
                 el.textContent = '?';
-                el.classList.replace('text-white', 'text-emerald-400');
+                el.classList.add('text-emerald-400');
             } else {
                 el.textContent = state.input;
-                el.classList.replace('text-emerald-400', 'text-white');
+                el.classList.add('text-white');
             }
         }
 
         function handleInput(val) {
+            if (state.locked) return;
             if (state.input.length < 5) {
                 state.input += val;
                 renderInput();
             }
         }
 
+        // Tlačidlo Zmazať vymaže všetky zadané číslice naraz
         function handleDelete() {
-            state.input = state.input.slice(0, -1);
+            if (state.locked) return;
+            state.input = '';
             renderInput();
         }
 
@@ -333,34 +338,39 @@
             document.getElementById('summary-screen').classList.remove('hidden');
         }
 
+        function nextProblem() {
+            if (state.sprintCurrent >= state.sprintTotal) {
+                endSprint();
+            } else {
+                state.sprintCurrent++;
+                generateProblem();
+            }
+        }
+
         function checkAnswer() {
-            if (state.input === '') return;
+            if (state.locked || state.input === '') return;
             state.attempts++;
             
-            if (parseInt(state.input) === state.currentProblem.answer) {
+            if (parseInt(state.input, 10) === state.currentProblem.answer) {
                 playSound('correct');
                 state.correct++;
                 state.streak++;
                 if (state.streak > state.maxStreak) state.maxStreak = state.streak;
                 state.score += config.basePoints[state.difficulty] + (state.streak * 5);
                 document.getElementById('score-display').textContent = state.score;
-                
-                if (state.sprintCurrent >= state.sprintTotal) {
-                    endSprint();
-                } else {
-                    state.sprintCurrent++;
-                    generateProblem();
-                }
+                nextProblem();
             } else {
+                // Nesprávne: iba 1 pokus, krátka spätná väzba a ide sa na ďalší príklad
                 playSound('wrong');
                 state.streak = 0;
+                state.locked = true;
                 
                 const el = document.getElementById('user-input');
+                el.classList.remove('text-white', 'text-emerald-400');
                 el.classList.add('text-rose-500');
-                el.classList.remove('text-white');
                 setTimeout(() => {
-                    state.input = '';
-                    renderInput();
+                    state.locked = false;
+                    nextProblem();
                 }, 400);
             }
         }
@@ -434,7 +444,7 @@
                 return;
             }
             if (e.key >= '0' && e.key <= '9') handleInput(e.key);
-            if (e.key === 'Backspace') handleDelete();
+            if (e.key === 'Backspace' && !state.locked) { state.input = state.input.slice(0, -1); renderInput(); }
             if (e.key === 'Enter') checkAnswer();
         });
 
@@ -460,6 +470,7 @@
             state.correct = 0;
             state.sprintCurrent = 1;
             state.startTime = null;
+            state.locked = false;
             document.getElementById('score-display').textContent = '0';
             document.getElementById('summary-screen').classList.add('hidden');
             generateProblem();
