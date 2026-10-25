@@ -178,7 +178,9 @@
             sprintTotal: 20,
             sprintCurrent: 1,
             startTime: null,
-            locked: false
+            locked: false,
+            seen: new Set(),
+            currentKey: null
         };
 
         const config = {
@@ -266,25 +268,46 @@
                 document.querySelector('[data-val="+"]').classList.replace('text-slate-400', 'text-white');
             }
             
-            const op = state.operations[Math.floor(Math.random() * state.operations.length)];
             const bounds = config[state.difficulty];
-            let num1, num2;
+            let op, num1, num2;
 
-            if (op === '+') {
-                num1 = randInt(1, bounds.maxAdd);
-                num2 = randInt(1, bounds.maxAdd);
-            } else if (op === '-') {
-                num1 = randInt(1, bounds.maxAdd);
-                num2 = randInt(1, bounds.maxAdd);
-                if (num2 > num1) [num1, num2] = [num2, num1]; // Vždy kladný výsledok
-            } else if (op === '*') {
-                num1 = randInt(2, bounds.maxMult);
-                num2 = randInt(2, bounds.maxMult);
-            } else if (op === '/') {
-                num2 = randInt(2, bounds.maxMult);
-                const answer = randInt(2, bounds.maxMult);
-                num1 = num2 * answer; // Vždy celočíselný výsledok
+            // Kľúč príkladu (sčítanie a násobenie sú komutatívne: 3+5 = 5+3)
+            const keyOf = (o, x, y) => {
+                const [p, q] = (o === '+' || o === '*') ? [Math.min(x, y), Math.max(x, y)] : [x, y];
+                return `${o}|${p}|${q}`;
+            };
+
+            const roll = () => {
+                op = state.operations[Math.floor(Math.random() * state.operations.length)];
+                if (op === '+') {
+                    num1 = randInt(1, bounds.maxAdd);
+                    num2 = randInt(1, bounds.maxAdd);
+                } else if (op === '-') {
+                    num1 = randInt(1, bounds.maxAdd);
+                    num2 = randInt(1, bounds.maxAdd);
+                    if (num2 > num1) [num1, num2] = [num2, num1]; // Vždy kladný výsledok
+                } else if (op === '*') {
+                    num1 = randInt(2, bounds.maxMult);
+                    num2 = randInt(2, bounds.maxMult);
+                } else if (op === '/') {
+                    num2 = randInt(2, bounds.maxMult);
+                    const answer = randInt(2, bounds.maxMult);
+                    num1 = num2 * answer; // Vždy celočíselný výsledok
+                }
+            };
+
+            // Skús nájsť príklad, ktorý ešte v šprinte nebol
+            let tries = 0;
+            do {
+                roll();
+                tries++;
+            } while (state.seen.has(keyOf(op, num1, num2)) && tries < 200);
+
+            // Ak sa vyčerpali všetky možnosti (napr. málo príkladov v danom nastavení), začni nové kolo
+            if (state.seen.has(keyOf(op, num1, num2))) {
+                state.seen.clear();
             }
+            state.currentKey = keyOf(op, num1, num2);
 
             state.currentProblem = { num1, op, num2, answer: eval(`${num1}${op === '×' ? '*' : op === '÷' ? '/' : op}${num2}`) };
             
@@ -339,6 +362,7 @@
         }
 
         function nextProblem() {
+            if (state.currentKey) state.seen.add(state.currentKey);
             if (state.sprintCurrent >= state.sprintTotal) {
                 endSprint();
             } else {
@@ -471,6 +495,7 @@
             state.sprintCurrent = 1;
             state.startTime = null;
             state.locked = false;
+            state.seen.clear();
             document.getElementById('score-display').textContent = '0';
             document.getElementById('summary-screen').classList.add('hidden');
             generateProblem();
