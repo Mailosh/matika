@@ -342,7 +342,7 @@
                 state.correct++;
                 state.streak++;
                 if (state.streak > state.maxStreak) state.maxStreak = state.streak;
-                state.score += config[state.difficulty].basePoints + (state.streak * 5);
+                state.score += config.basePoints[state.difficulty] + (state.streak * 5);
                 document.getElementById('score-display').textContent = state.score;
                 
                 if (state.sprintCurrent >= state.sprintTotal) {
